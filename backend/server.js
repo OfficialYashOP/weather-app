@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -8,6 +9,9 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // OpenWeatherMap API Key (Usually put in .env, using a placeholder/default for demo or expect user to add)
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY || 'bd5e378503939ddaee76f12ad7a97608'; // Sample API key for demo, ideally user should replace
@@ -71,6 +75,11 @@ app.get('/api/allergies', (req, res) => {
     };
     
     res.json(data);
+});
+
+// Catch-all route to serve the React app for any unhandled paths (for React Router)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
