@@ -27,7 +27,8 @@ function AirQuality() {
 
     try {
       const { lat, lon } = JSON.parse(coordsStr);
-      const response = await axios.get(`http://localhost:5000/api/aqi?lat=${lat}&lon=${lon}`);
+      // Use relative URL so it works in production
+      const response = await axios.get(`/api/aqi?lat=${lat}&lon=${lon}`);
       setAqiData(response.data);
       
       const aqiValue = response.data.list[0].main.aqi;

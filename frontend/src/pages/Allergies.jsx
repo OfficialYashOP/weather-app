@@ -25,7 +25,8 @@ function Allergies() {
     setError('');
 
     try {
-      const response = await axios.get(`http://localhost:5000/api/allergies?city=${storedCity}`);
+      // Use relative URL so it works in production
+      const response = await axios.get(`/api/allergies?city=${storedCity}`);
       setAllergyData(response.data);
       
       const risk = response.data.overallRisk;

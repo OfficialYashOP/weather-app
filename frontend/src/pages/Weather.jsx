@@ -18,7 +18,8 @@ function Weather() {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get(`http://localhost:5000/api/weather?city=${searchCity}`);
+      // Use relative URL so it works in both local (via proxy/server) and production
+      const response = await axios.get(`/api/weather?city=${searchCity}`);
       setWeatherData(response.data);
       if(response.data.coord) {
           localStorage.setItem('weather_coord', JSON.stringify(response.data.coord));
