@@ -12,5 +12,9 @@
   },
   "engines": {
     "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "md-to-pdf": "^5.2.5",
+    "puppeteer": "^25.0.2"
   }
 }

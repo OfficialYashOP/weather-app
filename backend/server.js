@@ -133,6 +133,11 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// For Vercel Serverless Functions: Export the app instead of listening directly
+if (process.env.NODE_ENV !== 'production' || process.env.RAILWAY_ENVIRONMENT) {
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
