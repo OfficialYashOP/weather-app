@@ -13,8 +13,20 @@ app.use(express.json());
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// OpenWeatherMap API Key (Usually put in .env, using a placeholder/default for demo or expect user to add)
-const WEATHER_API_KEY = process.env.WEATHER_API_KEY || 'bd5e378503939ddaee76f12ad7a97608'; // Sample API key for demo, ideally user should replace
+// We no longer need an API key since we are migrating to Open-Meteo (100% Free, No API Key needed)
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY || 'dummy'; 
+
+// Helper to convert WMO weather codes to OpenWeatherMap main conditions
+const getWmoWeather = (code) => {
+    if (code === 0) return { main: 'Clear', desc: 'clear sky' };
+    if ([1, 2, 3].includes(code)) return { main: 'Clouds', desc: 'partly cloudy' };
+    if ([45, 48].includes(code)) return { main: 'Clouds', desc: 'foggy' };
+    if ([51, 53, 55, 56, 57].includes(code)) return { main: 'Drizzle', desc: 'drizzle' };
+    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { main: 'Rain', desc: 'rainy' };
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return { main: 'Snow', desc: 'snowy' };
+    if ([95, 96, 99].includes(code)) return { main: 'Thunderstorm', desc: 'thunderstorm' };
+    return { main: 'Clear', desc: 'clear sky' };
+};
 
 app.get('/api/weather', async (req, res) => {
     const { city } = req.query;
@@ -24,15 +36,34 @@ app.get('/api/weather', async (req, res) => {
     }
 
     try {
-        const response = await axios.get(
-            `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${WEATHER_API_KEY}`
-        );
-        res.json(response.data);
+        // 1. Geocoding: Get lat/lon for the city
+        const geoResponse = await axios.get(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`);
+        
+        if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
+            return res.status(404).json({ error: 'City not found' });
+        }
+        
+        const location = geoResponse.data.results[0];
+        
+        // 2. Fetch Weather Data from Open-Meteo
+        const weatherResponse = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`);
+        const current = weatherResponse.data.current;
+        const wmo = getWmoWeather(current.weather_code);
+
+        // 3. Map to OpenWeatherMap structure so frontend doesn't break
+        const mappedData = {
+            coord: { lat: location.latitude, lon: location.longitude },
+            name: location.name,
+            sys: { country: location.country_code || '' },
+            weather: [{ main: wmo.main, description: wmo.desc }],
+            main: { temp: current.temperature_2m, humidity: current.relative_humidity_2m },
+            wind: { speed: current.wind_speed_10m }
+        };
+
+        res.json(mappedData);
     } catch (error) {
-        console.error("Error fetching weather:", error.response ? error.response.data : error.message);
-        res.status(error.response ? error.response.status : 500).json({
-            error: 'Failed to fetch weather data. Please check the city name.'
-        });
+        console.error("Error fetching weather from Open-Meteo:", error.message);
+        res.status(500).json({ error: 'Failed to fetch weather data. Please check the city name.' });
     }
 });
 
@@ -44,15 +75,35 @@ app.get('/api/aqi', async (req, res) => {
     }
 
     try {
-        const response = await axios.get(
-            `http://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}`
-        );
-        res.json(response.data);
+        const response = await axios.get(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,european_aqi`);
+        
+        const current = response.data.current;
+        
+        // Map European AQI (0-100) to 1-5 scale to match OpenWeatherMap format for the frontend
+        let aqiLevel = 1;
+        if (current.european_aqi > 20) aqiLevel = 2;
+        if (current.european_aqi > 40) aqiLevel = 3;
+        if (current.european_aqi > 60) aqiLevel = 4;
+        if (current.european_aqi > 80) aqiLevel = 5;
+
+        const mappedAqiData = {
+            list: [{
+                main: { aqi: aqiLevel },
+                components: {
+                    co: current.carbon_monoxide,
+                    no2: current.nitrogen_dioxide,
+                    o3: current.ozone,
+                    so2: current.sulphur_dioxide,
+                    pm2_5: current.pm2_5,
+                    pm10: current.pm10
+                }
+            }]
+        };
+
+        res.json(mappedAqiData);
     } catch (error) {
-        console.error("Error fetching AQI:", error.response ? error.response.data : error.message);
-        res.status(error.response ? error.response.status : 500).json({
-            error: 'Failed to fetch AQI data.'
-        });
+        console.error("Error fetching AQI from Open-Meteo:", error.message);
+        res.status(500).json({ error: 'Failed to fetch AQI data.' });
     }
 });
 
